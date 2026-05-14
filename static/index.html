@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Feast Roulette</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;0,9..40,800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <h1>Feast Roulette</h1>
+      <p class="lead">Browse real spots with photos (Yelp) or community maps (OpenStreetMap). Lock in a place, eyeball suggested orders, then spin — the wheel only draws from what you saw.</p>
+    </header>
+
+    <div class="steps" aria-label="Progress">
+      <span class="step-pill active" data-step="1">1 · Location</span>
+      <span class="step-pill" data-step="2">2 · Browse</span>
+      <span class="step-pill" data-step="3">3 · Roulette</span>
+    </div>
+
+    <section class="panel" id="step1">
+      <h2>Where are we eating?</h2>
+      <div class="grid-form cols-2">
+        <div>
+          <label for="addressInput">City or address</label>
+          <input type="text" id="addressInput" placeholder="e.g. Pokhara, Nepal" autocomplete="street-address">
+          <div class="row-actions">
+            <button type="button" class="btn btn-secondary" id="btnGeocode">Resolve on map</button>
+          </div>
+        </div>
+        <div>
+          <label>Quick location</label>
+          <div class="row-actions">
+            <button type="button" class="btn btn-primary" id="btnGps">Use GPS</button>
+            <button type="button" class="btn btn-secondary" id="btnIp">Use IP (rough)</button>
+          </div>
+          <p class="hint" id="coordLine"></p>
+        </div>
+      </div>
+
+      <div class="grid-form cols-2" style="margin-top:1rem;">
+        <div>
+          <label for="dataSourceSelect">Restaurant data</label>
+          <select id="dataSourceSelect">
+            <option value="auto" id="optAuto">Auto</option>
+            <option value="osm">OpenStreetMap (free)</option>
+            <option value="yelp" id="optYelp">Yelp only</option>
+          </select>
+          <p class="hint">Yelp needs <code style="color:#ccc;">YELP_API_KEY</code> in <code style="color:#ccc;">.env</code>. Check current <a href="https://docs.developer.yelp.com/docs/plans" target="_blank" rel="noopener">Yelp developer plans</a> — not always free for production.</p>
+        </div>
+        <div id="yelpTermRow" class="hidden">
+          <label for="yelpTermInput">Yelp search term (optional)</label>
+          <input type="text" id="yelpTermInput" placeholder="e.g. ramen, thali, brunch">
+        </div>
+        <div>
+          <label for="radiusSelect">Search radius</label>
+          <select id="radiusSelect">
+            <option value="3000">~3 km</option>
+            <option value="10000">~10 km</option>
+            <option value="15000" selected>~15 km</option>
+            <option value="25000">~25 km</option>
+            <option value="40000">~40 km (Yelp max)</option>
+            <option value="50000">~50 km (OSM; Yelp capped at 40)</option>
+          </select>
+        </div>
+        <div>
+          <label for="preferenceSelect">After spin</label>
+          <select id="preferenceSelect">
+            <option value="food_only">Food only</option>
+            <option value="food_and_drinks">Food + drink</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row-actions" style="margin-top:1rem;">
+        <button type="button" class="btn btn-primary" id="btnDiscover">Find restaurants</button>
+        <button type="button" class="btn btn-ghost" id="btnReset">Clear results</button>
+      </div>
+      <div class="loading-line" id="loadDiscover">Searching…</div>
+      <div class="error-banner" id="errorBanner" role="alert"></div>
+    </section>
+
+    <section class="panel hidden" id="restSection">
+      <h2>Pick a place <span style="color:var(--muted);font-weight:500;font-size:0.85rem;">(tap a card)</span></h2>
+      <div class="rest-grid" id="restGrid"></div>
+    </section>
+
+    <section class="panel hidden" id="pickSection">
+      <h2>Suggested orders &amp; spin</h2>
+      <div id="pickDetail"></div>
+      <div class="menu-chips" id="menuChips"></div>
+      <div class="spin-zone">
+        <div class="wheel" id="wheel" aria-hidden="true"></div>
+        <div>
+          <p style="margin:0 0 0.5rem;color:var(--muted);font-size:0.9rem;">The spin chooses <strong>only</strong> from the chips above.</p>
+          <button type="button" class="btn btn-primary" id="btnSpin">Spin the roulette</button>
+        </div>
+      </div>
+      <div class="loading-line" id="loadPick">Loading suggestions…</div>
+
+      <div class="result-card" id="resultCard">
+        <p id="resultLuck" style="margin:0;font-size:0.85rem;color:var(--muted);"></p>
+        <h3 id="resultRest"></h3>
+        <p class="big-food" id="resultFood"></p>
+        <p id="resultDrink" style="margin:0;color:var(--muted);"></p>
+        <p id="resultMsg" style="margin-top:1rem;color:var(--muted);font-size:0.95rem;"></p>
+      </div>
+    </section>
+
+    <footer class="site">
+      <p id="yelpFooter" class="hidden">Restaurant photos, ratings, and links may be shown under Yelp’s terms. This app is not affiliated with Yelp.</p>
+      <p>Maps links use Google Maps search URLs. OSM data © OpenStreetMap contributors.</p>
+    </footer>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
