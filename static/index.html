@@ -1,121 +1,459 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Feast Roulette</title>
-  <link rel="stylesheet" href="/static/styles.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;0,9..40,800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎰 Food Roulette</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#1a1a2e;min-height:100vh;color:#eee}
+header{background:linear-gradient(135deg,#c0392b,#922b21);padding:.9rem 1.4rem;display:flex;align-items:center;gap:.75rem;box-shadow:0 2px 10px rgba(0,0,0,.4)}
+header .logo{font-size:2rem}
+header h1{font-size:1.2rem;color:#fff}
+header p{font-size:.75rem;opacity:.8;color:#fcc}
+.src-badge{margin-left:auto;font-size:.68rem;padding:3px 10px;border-radius:99px;background:rgba(255,255,255,.15);color:#fff;white-space:nowrap}
+.search-wrap{background:#16213e;padding:.9rem 1.4rem;border-bottom:1px solid #0f3460;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+.search-wrap input{padding:.55rem .9rem;border:1px solid #0f3460;border-radius:7px;background:#0f3460;color:#eee;font-size:.9rem}
+.search-wrap input::placeholder{color:#888}
+input[type=text]{flex:1;min-width:150px}
+input[type=number]{width:110px}
+.btn{padding:.55rem 1.1rem;border:none;border-radius:7px;cursor:pointer;font-size:.88rem;font-weight:700;transition:filter .15s,transform .1s}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-red{background:#c0392b;color:#fff}
+.btn-green{background:#27ae60;color:#fff}
+.btn-gold{background:#f39c12;color:#1a1a2e}
+.filters{padding:.6rem 1.4rem;background:#16213e;border-bottom:1px solid #0f3460;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+.filter-chip{padding:.3rem .85rem;border-radius:99px;border:1px solid #0f3460;background:transparent;color:#aaa;cursor:pointer;font-size:.78rem;transition:all .15s}
+.filter-chip:hover,.filter-chip.active{background:#c0392b;border-color:#c0392b;color:#fff}
+.filters label{font-size:.78rem;color:#888;margin-left:auto}
+.filters select{padding:.3rem .6rem;border:1px solid #0f3460;border-radius:6px;background:#0f3460;color:#eee;font-size:.78rem}
+#status{padding:.5rem 1.4rem;font-size:.82rem;color:#aaa;background:#16213e;display:none;border-bottom:1px solid #0f3460}
+#status.err{color:#e74c3c}
+#spinner{text-align:center;padding:4rem;display:none}
+.ring{display:inline-block;width:44px;height:44px;border:4px solid #0f3460;border-top-color:#c0392b;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#empty{display:none;text-align:center;padding:4rem 1rem;color:#555}
+#empty div{font-size:3rem;margin-bottom:.5rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:1rem;padding:1.2rem 1.4rem}
+.card{background:#16213e;border-radius:10px;overflow:hidden;cursor:pointer;border:2px solid transparent;transition:border-color .15s,transform .15s,box-shadow .15s;position:relative}
+.card:hover{transform:translateY(-3px);box-shadow:0 6px 20px rgba(0,0,0,.4)}
+.card.selected{border-color:#c0392b;box-shadow:0 0 0 3px rgba(192,57,43,.3)}
+.thumb{height:135px;background:#0f3460;overflow:hidden;position:relative}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.thumb iframe{width:100%;height:100%;border:none;pointer-events:none}
+.dist-badge{position:absolute;top:7px;right:7px;background:rgba(0,0,0,.7);color:#fff;font-size:.65rem;padding:2px 7px;border-radius:99px}
+.tick{position:absolute;top:7px;left:7px;background:#c0392b;color:#fff;width:22px;height:22px;border-radius:50%;font-size:.8rem;display:none;align-items:center;justify-content:center}
+.card.selected .tick{display:flex}
+.card-body{padding:.7rem .85rem .85rem}
+.card-body h3{font-size:.88rem;color:#eee;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-body .addr{font-size:.72rem;color:#777;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-meta{display:flex;align-items:center;gap:5px;margin-top:6px;flex-wrap:wrap}
+.cpill{font-size:.66rem;padding:2px 7px;border-radius:99px;background:#0f3460;color:#aaa}
+.rating{font-size:.72rem;color:#f39c12;font-weight:700}
+#action-bar{display:none;position:fixed;bottom:0;left:0;right:0;background:#16213e;border-top:2px solid #c0392b;padding:.8rem 1.4rem;align-items:center;gap:.8rem;flex-wrap:wrap;box-shadow:0 -4px 16px rgba(0,0,0,.5);z-index:50}
+#action-bar p{flex:1;font-size:.85rem;color:#ccc}
+#sel-count{color:#c0392b;font-weight:700}
+#action-bar select{padding:.4rem .7rem;background:#0f3460;border:1px solid #0f3460;color:#eee;border-radius:6px;font-size:.83rem}
+#spacer{height:80px}
+#overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;align-items:center;justify-content:center}
+#overlay.open{display:flex}
+.modal{background:#1a1a2e;border-radius:16px;max-width:400px;width:93%;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.6);position:relative}
+.slot-header{background:linear-gradient(135deg,#c0392b,#922b21);padding:1.2rem;text-align:center}
+.slot-header h2{color:#fff;font-size:1rem;margin-bottom:.8rem}
+.slots{display:flex;gap:.5rem;justify-content:center}
+.slot{background:rgba(0,0,0,.3);border-radius:8px;padding:.4rem .6rem;min-width:100px;height:42px;overflow:hidden;position:relative;border:1px solid rgba(255,255,255,.15)}
+.slot-inner{display:flex;flex-direction:column;gap:4px}
+.slot-item{font-size:.78rem;color:#fff;text-align:center;padding:5px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;height:32px;line-height:22px}
+.slot.spinning .slot-inner{animation:slotSpin .12s linear infinite}
+@keyframes slotSpin{0%{transform:translateY(0)}100%{transform:translateY(-36px)}}
+.modal-result{padding:1.2rem 1.4rem 1.4rem;text-align:center;display:none}
+.modal-result .luck{font-size:2.2rem;margin-bottom:.4rem}
+.modal-result h3{color:#e74c3c;font-size:1.05rem;margin-bottom:.2rem}
+.modal-result .sub{font-size:.78rem;color:#777;margin-bottom:.8rem}
+.modal-photo{height:140px;overflow:hidden;border-radius:8px;margin-bottom:.9rem;background:#0f3460;display:flex;align-items:center;justify-content:center;font-size:3rem}
+.modal-photo img{width:100%;height:100%;object-fit:cover}
+.order-pill{display:inline-block;background:#2c0e0e;color:#e74c3c;font-weight:700;padding:.4rem 1rem;border-radius:99px;font-size:.9rem;margin:.25rem}
+.modal-actions{margin-top:1rem;display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap}
+.maps-btn{background:#27ae60;color:#fff;padding:.7rem 1.4rem;border-radius:9px;text-decoration:none;font-size:1.1rem;font-weight:800;box-shadow:0 4px 12px rgba(39,174,96,0.4);transition:transform 0.1s}
+.maps-btn:hover{background:#219a52;transform:scale(1.05)}
+.respin-btn{background:#0f3460;color:#5dade2;padding:.5rem 1.1rem;border-radius:7px;border:1px solid #1a5276;font-size:.83rem;font-weight:700;cursor:pointer}
+.close-btn{position:absolute;top:10px;right:13px;background:none;border:none;color:rgba(255,255,255,.7);font-size:1.3rem;cursor:pointer;z-index:5}
+</style>
 </head>
 <body>
-  <div class="shell">
-    <header class="hero">
-      <h1>Feast Roulette</h1>
-      <p class="lead">Browse real spots with photos (Yelp) or community maps (OpenStreetMap). Lock in a place, eyeball suggested orders, then spin — the wheel only draws from what you saw.</p>
-    </header>
 
-    <div class="steps" aria-label="Progress">
-      <span class="step-pill active" data-step="1">1 · Location</span>
-      <span class="step-pill" data-step="2">2 · Browse</span>
-      <span class="step-pill" data-step="3">3 · Roulette</span>
+<header>
+  <div class="logo">&#127920;</div>
+  <div><h1>Food Roulette</h1><p>Find &#8594; Pick &#8594; Spin!</p></div>
+  <span class="src-badge" id="srcBadge" style="display:none"></span>
+</header>
+
+<div class="search-wrap">
+  <button id="gpsBtn" class="btn btn-green" style="font-size:1rem; padding:0.6rem 1.4rem; font-weight:bold;">&#128205; Use My Location (GPS)</button>
+  <span style="color:#777; font-size:0.9rem; margin:0 0.5rem;">or enter manually:</span>
+  <input type="text" id="addr" placeholder="City / area (e.g. Pokhara, Lakeside)" value="">
+  <input type="number" id="radius" value="10000" min="500" max="50000" title="Radius in metres">
+  <button id="searchBtn" class="btn btn-red" style="font-size:1rem; padding:0.6rem 1.4rem;">&#128269; Find</button>
+</div>
+
+<div class="filters" id="filterBar" style="display:none">
+  <span style="font-size:.78rem;color:#888">Filter:</span>
+  <button class="filter-chip active" data-type="all">All</button>
+  <button class="filter-chip" data-type="cafe">&#9749; Cafe</button>
+  <button class="filter-chip" data-type="fast_food">&#127828; Fast Food</button>
+  <button class="filter-chip" data-type="seafood">&#127844; Seafood</button>
+  <button class="filter-chip" data-type="restaurant">&#127869; Restaurant</button>
+  <label>Sort:
+    <select id="sortSel">
+      <option value="distance">Distance</option>
+      <option value="rating">Rating</option>
+      <option value="name">Name A-Z</option>
+    </select>
+  </label>
+</div>
+
+<div id="status"></div>
+<div id="spinner">
+  <div class="ring"></div>
+  <p id="spinnerText" style="margin-top:1rem;color:#aaa;font-size:1.2rem;font-weight:600">Searching nearby restaurants...</p>
+  <p style="margin-top:0.4rem;color:#777;font-size:0.85rem;">Fetching live API data (this may take a few moments)...</p>
+</div>
+<div id="welcome" style="text-align:center; padding:6rem 1rem; color:#aaa;">
+  <div style="font-size:4rem; margin-bottom:1rem;">&#128205;</div>
+  <h2 style="color:#eee; margin-bottom:0.5rem;">Discover Local Food</h2>
+  <p>Click "Use My Location" or enter a city to find places to eat nearby.</p>
+</div>
+<div id="empty"><div>&#127869;</div><p>No restaurants found. Try increasing the radius.</p></div>
+<div class="grid" id="grid"></div>
+<div id="spacer"></div>
+
+<div id="action-bar">
+  <p><span id="sel-count">0</span> selected &mdash; spin when ready</p>
+  <select id="pref">
+    <option value="food_and_drinks" selected>&#127866; Food &amp; Drinks</option>
+    <option value="food_only">&#127869; Food Only</option>
+  </select>
+  <button id="spinBtn" class="btn btn-gold">&#127922; Spin!</button>
+</div>
+
+<div id="overlay">
+  <div class="modal">
+    <button class="close-btn" id="closeBtn">&#10005;</button>
+    <div class="slot-header" id="slotHeader">
+      <h2>&#127920; Spinning...</h2>
+      <div class="slots">
+        <div class="slot" id="slot1"><div class="slot-inner" id="s1inner"><div class="slot-item">&#127869;</div></div></div>
+        <div class="slot" id="slot2"><div class="slot-inner" id="s2inner"><div class="slot-item">&#129367;</div></div></div>
+        <div class="slot" id="slot3"><div class="slot-inner" id="s3inner"><div class="slot-item">&#129380;</div></div></div>
+      </div>
     </div>
-
-    <section class="panel" id="step1">
-      <h2>Where are we eating?</h2>
-      <div class="grid-form cols-2">
-        <div>
-          <label for="addressInput">City or address</label>
-          <input type="text" id="addressInput" placeholder="e.g. Pokhara, Nepal" autocomplete="street-address">
-          <div class="row-actions">
-            <button type="button" class="btn btn-secondary" id="btnGeocode">Resolve on map</button>
-          </div>
-        </div>
-        <div>
-          <label>Quick location</label>
-          <div class="row-actions">
-            <button type="button" class="btn btn-primary" id="btnGps">Use GPS</button>
-            <button type="button" class="btn btn-secondary" id="btnIp">Use IP (rough)</button>
-          </div>
-          <p class="hint" id="coordLine"></p>
-        </div>
+    <div class="modal-result" id="modalResult">
+      <div class="luck" id="m-luck">&#127920;</div>
+      <h3 id="m-name"></h3>
+      <p class="sub" id="m-addr"></p>
+      <div class="modal-photo" id="m-photo">&#127869;</div>
+      <div id="m-food" class="order-pill"></div>
+      <div id="m-drink" class="order-pill" style="display:none"></div>
+      <div class="modal-actions">
+        <a id="m-maps" class="maps-btn" target="_blank" style="display:none">&#128205; Google Maps</a>
+        <button class="respin-btn" id="respinBtn">&#128260; Re-spin</button>
       </div>
-
-      <div class="grid-form cols-2" style="margin-top:1rem;">
-        <div>
-          <label for="dataSourceSelect">Restaurant data</label>
-          <select id="dataSourceSelect">
-            <option value="auto" id="optAuto">Auto</option>
-            <option value="osm">OpenStreetMap (free)</option>
-            <option value="yelp" id="optYelp">Yelp only</option>
-          </select>
-          <p class="hint">Yelp needs <code style="color:#ccc;">YELP_API_KEY</code> in <code style="color:#ccc;">.env</code>. Check current <a href="https://docs.developer.yelp.com/docs/plans" target="_blank" rel="noopener">Yelp developer plans</a> — not always free for production.</p>
-        </div>
-        <div id="yelpTermRow" class="hidden">
-          <label for="yelpTermInput">Yelp search term (optional)</label>
-          <input type="text" id="yelpTermInput" placeholder="e.g. ramen, thali, brunch">
-        </div>
-        <div>
-          <label for="radiusSelect">Search radius</label>
-          <select id="radiusSelect">
-            <option value="3000">~3 km</option>
-            <option value="10000">~10 km</option>
-            <option value="15000" selected>~15 km</option>
-            <option value="25000">~25 km</option>
-            <option value="40000">~40 km (Yelp max)</option>
-            <option value="50000">~50 km (OSM; Yelp capped at 40)</option>
-          </select>
-        </div>
-        <div>
-          <label for="preferenceSelect">After spin</label>
-          <select id="preferenceSelect">
-            <option value="food_only">Food only</option>
-            <option value="food_and_drinks">Food + drink</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="row-actions" style="margin-top:1rem;">
-        <button type="button" class="btn btn-primary" id="btnDiscover">Find restaurants</button>
-        <button type="button" class="btn btn-ghost" id="btnReset">Clear results</button>
-      </div>
-      <div class="loading-line" id="loadDiscover">Searching…</div>
-      <div class="error-banner" id="errorBanner" role="alert"></div>
-    </section>
-
-    <section class="panel hidden" id="restSection">
-      <h2>Pick a place <span style="color:var(--muted);font-weight:500;font-size:0.85rem;">(tap a card)</span></h2>
-      <div class="rest-grid" id="restGrid"></div>
-    </section>
-
-    <section class="panel hidden" id="pickSection">
-      <h2>Suggested orders &amp; spin</h2>
-      <div id="pickDetail"></div>
-      <div class="menu-chips" id="menuChips"></div>
-      <div class="spin-zone">
-        <div class="wheel" id="wheel" aria-hidden="true"></div>
-        <div>
-          <p style="margin:0 0 0.5rem;color:var(--muted);font-size:0.9rem;">The spin chooses <strong>only</strong> from the chips above.</p>
-          <button type="button" class="btn btn-primary" id="btnSpin">Spin the roulette</button>
-        </div>
-      </div>
-      <div class="loading-line" id="loadPick">Loading suggestions…</div>
-
-      <div class="result-card" id="resultCard">
-        <p id="resultLuck" style="margin:0;font-size:0.85rem;color:var(--muted);"></p>
-        <h3 id="resultRest"></h3>
-        <p class="big-food" id="resultFood"></p>
-        <p id="resultDrink" style="margin:0;color:var(--muted);"></p>
-        <p id="resultMsg" style="margin-top:1rem;color:var(--muted);font-size:0.95rem;"></p>
-      </div>
-    </section>
-
-    <footer class="site">
-      <p id="yelpFooter" class="hidden">Restaurant photos, ratings, and links may be shown under Yelp’s terms. This app is not affiliated with Yelp.</p>
-      <p>Maps links use Google Maps search URLs. OSM data © OpenStreetMap contributors.</p>
-    </footer>
+      <p style="font-size:.72rem;color:#555;margin-top:.8rem" id="m-luck-msg"></p>
+    </div>
   </div>
-  <script src="/static/app.js"></script>
+</div>
+
+<script>
+var $=function(id){return document.getElementById(id);};
+var allRest=[],selected=new Set(),lastChosen=[];
+var userLat=null,userLon=null;
+
+var waitTimer=null;
+function startWaitTimer(el, prefix){
+  if(waitTimer) clearInterval(waitTimer);
+  var sec=0;
+  el.textContent=prefix+' ('+sec+'s)';
+  waitTimer=setInterval(function(){
+    sec++;
+    el.textContent=prefix+' ('+sec+'s)';
+  }, 1000);
+}
+function stopWaitTimer(el, finalMsg){
+  if(waitTimer) clearInterval(waitTimer);
+  if(el) el.innerHTML=finalMsg;
+}
+
+// Cuisine style map
+var CS={
+  'cafe':       {g:'#6f4e37,#a0522d',e:'&#9749;'},
+  'coffee':     {g:'#6f4e37,#a0522d',e:'&#9749;'},
+  'fast food':  {g:'#c0392b,#e74c3c',e:'&#127828;'},
+  'fast_food':  {g:'#c0392b,#e74c3c',e:'&#127828;'},
+  'pizza':      {g:'#e67e22,#d35400',e:'&#127829;'},
+  'italian':    {g:'#27ae60,#1e8449',e:'&#127837;'},
+  'chinese':    {g:'#c0392b,#922b21',e:'&#129345;'},
+  'indian':     {g:'#f39c12,#d68910',e:'&#127835;'},
+  'japanese':   {g:'#2c3e50,#1a252f',e:'&#127843;'},
+  'thai':       {g:'#1abc9c,#148f77',e:'&#127836;'},
+  'mexican':    {g:'#e74c3c,#c0392b',e:'&#127790;'},
+  'bakery':     {g:'#d4ac0d,#b7950b',e:'&#129360;'},
+  'seafood':    {g:'#1a5276,#154360',e:'&#127844;'},
+  'restaurant': {g:'#1a3a5c,#0f2744',e:'&#127869;'},
+  'default':    {g:'#1a3a5c,#0f2744',e:'&#127869;'}
+};
+
+function getCuisineStyle(cuisine){
+  var c=(cuisine||'').toLowerCase();
+  for(var k in CS){ if(c.indexOf(k)>=0) return CS[k]; }
+  return CS['default'];
+}
+
+// GPS
+$('gpsBtn').onclick=function(){
+  startWaitTimer($('gpsBtn'), '⏳ Locating you...');
+  navigator.geolocation.getCurrentPosition(function(p){
+    userLat=p.coords.latitude; userLon=p.coords.longitude;
+    $('addr').value='';
+    stopWaitTimer($('gpsBtn'), '&#10003; GPS');
+    showStatus('GPS: '+userLat.toFixed(5)+', '+userLon.toFixed(5));
+  },function(){
+    stopWaitTimer($('gpsBtn'), '&#128205; GPS');
+    showStatus('GPS failed. Type your city.',true);
+  });
+};
+
+// Search
+$('searchBtn').onclick=doSearch;
+$('addr').onkeydown=function(e){if(e.key==='Enter')doSearch();};
+
+function doSearch(){
+  var a=$('addr').value.trim();
+  if(!userLat && !userLon && !a){
+    showStatus('⚠️ Please click "Use My Location (GPS)" or type a city name first.', true);
+    return;
+  }
+
+  selected.clear(); allRest=[];
+  $('grid').innerHTML='';
+  $('action-bar').style.display='none';
+  $('empty').style.display='none';
+  if($('welcome')) $('welcome').style.display='none';
+  $('filterBar').style.display='none';
+  $('spinner').style.display='block';
+  startWaitTimer($('spinnerText'), 'Searching nearby restaurants...');
+  $('searchBtn').disabled=true;
+  $('gpsBtn').disabled=true;
+  hideStatus();
+
+  var payload={radius:parseInt($('radius').value)||10000};
+  var a=$('addr').value.trim();
+  if(userLat&&userLon&&!a){payload.lat=userLat;payload.lon=userLon;}
+  else if(a){payload.address=a;}
+
+  fetch('/api/restaurants/search',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  }).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});})
+  .then(function(res){
+    stopWaitTimer();
+    $('spinner').style.display='none';
+    if(!res.ok||!res.d.success) throw new Error(res.d.error||res.d.detail||'Search failed');
+    allRest=res.d.restaurants||[];
+    var sb=$('srcBadge');
+    sb.textContent=res.d.source==='foursquare'?'Foursquare':'OpenStreetMap';
+    sb.style.display='';
+    if(!allRest.length){$('empty').style.display='block';return;}
+    var city=res.d.location&&res.d.location.city?res.d.location.city:'';
+    showStatus('Found '+allRest.length+' restaurants'+(city?' near '+city:'')+' — click cards to select, then Spin!');
+    $('filterBar').style.display='flex';
+    renderCards(allRest);
+  }).catch(function(e){
+    stopWaitTimer();
+    $('spinner').style.display='none';
+    showStatus(e.message,true);
+  }).finally(function(){
+    $('searchBtn').disabled=false;
+    $('gpsBtn').disabled=false;
+  });
+}
+
+// Filters
+document.querySelectorAll('.filter-chip').forEach(function(btn){
+  btn.onclick=function(){
+    document.querySelectorAll('.filter-chip').forEach(function(b){b.classList.remove('active');});
+    btn.classList.add('active');
+    applyFilters();
+  };
+});
+$('sortSel').onchange=applyFilters;
+
+function applyFilters(){
+  var type=(document.querySelector('.filter-chip.active')||{dataset:{type:'all'}}).dataset.type;
+  var sort=$('sortSel').value;
+  var list=allRest.slice();
+  if(type!=='all') list=list.filter(function(r){
+    var c=(r.cuisine||'').toLowerCase();
+    if(type==='cafe') return c.indexOf('cafe')>=0||c.indexOf('coffee')>=0;
+    if(type==='fast_food') return c.indexOf('fast')>=0;
+    if(type==='seafood') return c.indexOf('sea')>=0 || c.indexOf('fish')>=0;
+    if(type==='restaurant') return c.indexOf('cafe')<0&&c.indexOf('fast')<0&&c.indexOf('sea')<0;
+    return true;
+  });
+  if(sort==='rating') list.sort(function(a,b){return (b.rating||0)-(a.rating||0);});
+  else if(sort==='name') list.sort(function(a,b){return a.name.localeCompare(b.name);});
+  else list.sort(function(a,b){return (a.distance_km||99)-(b.distance_km||99);});
+  renderCards(list);
+}
+
+function renderCards(list){
+  var grid=$('grid');
+  grid.innerHTML='';
+  list.forEach(function(r){
+    var i=allRest.indexOf(r);
+    var lat=r.coordinates&&r.coordinates.lat;
+    var lon=r.coordinates&&r.coordinates.lon;
+    var dist=r.distance_km?r.distance_km+' km':'';
+    var cuisine=(r.cuisine||'Restaurant').replace(/_/g,' ');
+    var cs=getCuisineStyle(cuisine);
+
+    var thumbHTML='';
+    if(r.photo_url){
+      thumbHTML='<img src="'+r.photo_url+'" alt="'+r.name+'" loading="lazy">';
+    } else if(lat&&lon){
+      var b=(lon-.002)+','+(lat-.002)+','+(lon+.002)+','+(lat+.002);
+      thumbHTML='<div style="display:flex;height:100%">'
+        +'<div style="width:42%;background:linear-gradient(135deg,'+cs.g+');display:flex;align-items:center;justify-content:center;font-size:2rem">'+cs.e+'</div>'
+        +'<iframe style="flex:1;border:none;pointer-events:none" src="https://www.openstreetmap.org/export/embed.html?bbox='+b+'&layer=mapnik&marker='+lat+','+lon+'" loading="lazy"></iframe>'
+        +'</div>';
+    } else {
+      thumbHTML='<div style="background:linear-gradient(135deg,'+cs.g+');height:100%;display:flex;align-items:center;justify-content:center;font-size:2.5rem">'+cs.e+'</div>';
+    }
+
+    var rating=r.rating?'<span class="rating">&#9733; '+r.rating+'</span>':'';
+    var card=document.createElement('div');
+    card.className='card'+(selected.has(i)?' selected':'');
+    card.innerHTML='<div class="thumb">'
+      +thumbHTML
+      +'<div class="tick">&#10003;</div>'
+      +(dist?'<div class="dist-badge">'+dist+'</div>':'')
+      +'</div>'
+      +'<div class="card-body">'
+      +'<h3 title="'+r.name+'">'+r.name+'</h3>'
+      +'<p class="addr" title="'+(r.address||'')+'">'+( r.address||'Pokhara, Nepal')+'</p>'
+      +'<div class="card-meta"><span class="cpill">'+cuisine+'</span>'+rating+'</div>'
+      +'</div>';
+    card.onclick=function(){toggleCard(i,card);};
+    grid.appendChild(card);
+  });
+}
+
+function toggleCard(i,el){
+  if(selected.has(i)){selected.delete(i);el.classList.remove('selected');}
+  else{selected.add(i);el.classList.add('selected');}
+  var n=selected.size;
+  $('sel-count').textContent=n;
+  $('action-bar').style.display=n?'flex':'none';
+}
+
+// Spin
+$('spinBtn').onclick=doSpin;
+$('respinBtn').onclick=doSpin;
+
+var EMOJIS=['&#127829;','&#127836;','&#127835;','&#127843;','&#127790;','&#127828;','&#129367;','&#129368;','&#127837;','&#129345;','&#127869;','&#129361;'];
+
+function doSpin(){
+  if(!selected.size) return;
+  lastChosen=[];
+  selected.forEach(function(i){lastChosen.push(allRest[i]);});
+  $('slotHeader').querySelector('h2').textContent='Spinning...';
+  $('modalResult').style.display='none';
+  startSlots();
+  $('overlay').classList.add('open');
+
+  var pref=$('pref').value;
+  $('slot3').style.display = (pref === 'food_only') ? 'none' : 'block';
+
+  fetch('/api/decision/make',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({restaurants:lastChosen,preference:pref})
+  }).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});})
+  .then(function(res){
+    if(!res.ok) throw new Error(res.d.detail||'Spin failed');
+    stopSlots(res.d);
+  }).catch(function(e){
+    stopSlots(null);
+    $('overlay').classList.remove('open');
+    showStatus('Spin error: '+e.message,true);
+  });
+}
+
+function startSlots(){
+  [$('s1inner'),$('s2inner'),$('s3inner')].forEach(function(s){
+    var items=EMOJIS.slice().sort(function(){return Math.random()-.5;}).slice(0,6);
+    s.innerHTML=items.map(function(e){return '<div class="slot-item">'+e+'</div>';}).join('');
+    s.parentElement.classList.add('spinning');
+  });
+}
+
+function stopSlots(data){
+  setTimeout(function(){
+    [$('slot1'),$('slot2'),$('slot3')].forEach(function(s){s.classList.remove('spinning');});
+    if(data) showResult(data);
+  },1500);
+}
+
+function showResult(data){
+  var r=data.selected_restaurant;
+  var match=null;
+  for(var i=0;i<lastChosen.length;i++){if(lastChosen[i].name===r.name){match=lastChosen[i];break;}}
+  if(!match) match=r;
+  var luck=data.luck_factor||0;
+  var cs=getCuisineStyle(r.cuisine||'');
+
+  $('s1inner').innerHTML='<div class="slot-item" style="font-size:.65rem">'+r.name.substring(0,14)+'</div>';
+  $('s2inner').innerHTML='<div class="slot-item">&#127869;</div>';
+  if(data.selected_drink) {
+    $('s3inner').innerHTML='<div class="slot-item">&#129380;</div>';
+  }
+  $('slotHeader').querySelector('h2').textContent='The roulette chose!';
+
+  var emoji=luck>.8?'&#129321;':luck>.6?'&#128516;':luck>.4?'&#128522;':luck>.2?'&#128578;':'&#128556;';
+  $('m-luck').innerHTML=emoji;
+  $('m-name').textContent=r.name;
+  $('m-addr').textContent=r.address||'';
+
+  var ph=$('m-photo');
+  if(match.photo_url){
+    ph.innerHTML='<img src="'+match.photo_url+'" alt="'+r.name+'">';
+  } else {
+    ph.innerHTML='<div style="background:linear-gradient(135deg,'+cs.g+');height:100%;width:100%;display:flex;align-items:center;justify-content:center;font-size:3rem">'+cs.e+'</div>';
+  }
+
+  $('m-food').textContent='Eat: '+(data.selected_menu_item||'House Special');
+  var dk=$('m-drink');
+  if(data.selected_drink){dk.style.display='inline-block';dk.textContent='Drink: '+data.selected_drink;}
+  else dk.style.display='none';
+
+  var lat=(r.coordinates&&r.coordinates.lat)||(match.coordinates&&match.coordinates.lat);
+  var lon=(r.coordinates&&r.coordinates.lon)||(match.coordinates&&match.coordinates.lon);
+  var mapEl=$('m-maps');
+  if(lat&&lon){mapEl.href='https://www.google.com/maps?q='+lat+','+lon;mapEl.style.display='inline-block';}
+  else mapEl.style.display='none';
+
+  $('m-luck-msg').textContent='Luck factor: '+(luck*100).toFixed(0)+'%';
+  $('modalResult').style.display='block';
+}
+
+$('closeBtn').onclick=function(){$('overlay').classList.remove('open');};
+$('overlay').onclick=function(e){if(e.target===$('overlay'))$('overlay').classList.remove('open');};
+
+function showStatus(m,err){var e=$('status');e.textContent=m;e.className=err?'err':'';e.style.display='block';}
+function hideStatus(){$('status').style.display='none';}
+
+// doSearch(); // Auto-search disabled so user focuses on GPS first
+</script>
 </body>
 </html>

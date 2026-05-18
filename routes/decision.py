@@ -80,41 +80,35 @@ async def spin_order(request: SpinOrderRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/make", response_model=DecisionResponse)
+@router.post("/make")
 async def make_food_decision(request: DecisionRequest):
     """Make a Russian roulette style food decision"""
     try:
         if not request.restaurants:
             raise HTTPException(status_code=400, detail="No restaurants provided")
-        
-        # Convert string enum to service enum
-        preference = PreferenceType.FOOD_ONLY if request.preference == PreferenceEnum.FOOD_ONLY else PreferenceType.FOOD_AND_DRINKS
-        
-        # Make the decision
-        result = await decision_service.make_decision(request.restaurants, preference)
-        
-        # Get explanation
-        explanation = await decision_service.get_decision_explanation(result)
-        
-        # Format the decision for response
-        decision_data = {
-            "restaurant": result.selected_restaurant,
-            "menu_item": result.selected_menu_item,
-            "drink": result.selected_drink,
-            "luck_factor": result.luck_factor,
-            "preference": request.preference
-        }
-        
-        return DecisionResponse(
-            success=True,
-            decision=decision_data,
-            explanation=explanation
+
+        preference = (
+            PreferenceType.FOOD_AND_DRINKS
+            if request.preference == PreferenceEnum.FOOD_AND_DRINKS
+            else PreferenceType.FOOD_ONLY
         )
-        
+
+        result = await decision_service.make_decision(request.restaurants, preference)
+
+        # Flat response so frontend can access fields directly
+        return {
+            "success": True,
+            "selected_restaurant": result.selected_restaurant,
+            "selected_menu_item": result.selected_menu_item,
+            "selected_drink": result.selected_drink,
+            "luck_factor": round(result.luck_factor, 3),
+        }
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error making decision: {str(e)}")
+
 
 @router.get("/preferences")
 async def get_available_preferences():

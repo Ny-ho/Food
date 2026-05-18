@@ -1,0 +1,21 @@
+# Environment variables (contains secrets)
+.env
+
+# Python compilation files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE / Editor folders
+.vscode/
+.idea/
+*.swp
+.cursorrules
+
+# MacOS
+.DS_Store
+
+# Virtual environments (if any)
+venv/
+env/
+.venv/

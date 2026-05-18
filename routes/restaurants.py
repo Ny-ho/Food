@@ -1,156 +1,91 @@
-from enum import Enum
-
+import asyncio
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 
 from services.restaurant_service import RestaurantService
-from services.yelp_service import YelpService
+from services.foursquare_service import FoursquareService
+from services.location_service import LocationService
 
 router = APIRouter()
 restaurant_service = RestaurantService()
-yelp_service = YelpService()
+foursquare_service = FoursquareService()
+location_service = LocationService()
+
 
 class RestaurantSearchRequest(BaseModel):
-    lat: float
-    lon: float
-    radius: Optional[int] = 2000  # Default 2km radius
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    address: Optional[str] = None
+    radius: Optional[int] = 10000   # 10 km — covers Pokhara district
 
-
-class DiscoverSource(str, Enum):
-    auto = "auto"
-    osm = "osm"
-    yelp = "yelp"
-
-
-class DiscoverRequest(BaseModel):
-    lat: float
-    lon: float
-    radius: Optional[int] = 15000
-    source: DiscoverSource = DiscoverSource.auto
-    yelp_term: Optional[str] = None
 
 class RestaurantResponse(BaseModel):
     success: bool
     restaurants: Optional[List[Dict[str, Any]]] = None
     count: Optional[int] = None
+    location: Optional[Dict[str, Any]] = None
+    source: Optional[str] = None
     error: Optional[str] = None
 
-class RestaurantDetailsResponse(BaseModel):
-    success: bool
-    restaurant: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
 
-@router.post("/discover", response_model=RestaurantResponse)
-async def discover_restaurants(request: DiscoverRequest):
+@router.post("/search", response_model=RestaurantResponse,
+             summary="Search restaurants — uses Foursquare if key present, else OpenStreetMap")
+async def search_restaurants(request: RestaurantSearchRequest):
     """
-    Unified search: OpenStreetMap (free) or Yelp (needs YELP_API_KEY).
-    `source=auto` uses Yelp when a key is configured, otherwise OSM.
+    Step 1 of the flow: resolve location then find restaurants.
+    Priority:
+      1. lat/lon provided directly
+      2. Address geocoded via Nominatim
+      3. IP-based detection (unreliable in Nepal — will say Kathmandu)
     """
-    use_yelp = False
-    if request.source == DiscoverSource.yelp:
-        use_yelp = True
-    elif request.source == DiscoverSource.osm:
-        use_yelp = False
+    # ── Resolve location ──────────────────────────────────────────────────────
+    location_data: Dict[str, Any] = {}
+
+    if request.lat is not None and request.lon is not None:
+        location_data = {"lat": request.lat, "lon": request.lon, "source": "manual_coords"}
+    elif request.address:
+        geo = await location_service.geocode_address(request.address)
+        if not geo:
+            raise HTTPException(status_code=400, detail=f"Could not find location: '{request.address}'")
+        location_data = {**geo, "source": "address"}
     else:
-        use_yelp = yelp_service.is_configured()
-
-    radius = int(request.radius or 15000)
-
-    if use_yelp:
-        if not yelp_service.is_configured():
+        geo = await location_service.get_location_from_ip()
+        if not geo:
             raise HTTPException(
                 status_code=503,
-                detail="Yelp is not configured. Add YELP_API_KEY to your .env file or choose OpenStreetMap.",
+                detail="Could not auto-detect location. Type your city (e.g. Pokhara)."
             )
-        try:
-            rows = await yelp_service.search_restaurants(
-                request.lat,
-                request.lon,
-                radius,
-                term=request.yelp_term,
-                limit=50,
-            )
-        except RuntimeError as e:
-            raise HTTPException(status_code=502, detail=str(e))
-        return RestaurantResponse(success=True, restaurants=rows, count=len(rows))
+        location_data = {**geo, "source": "ip_detection"}
 
-    restaurants = await restaurant_service.find_restaurants_nearby(
-        lat=request.lat,
-        lon=request.lon,
-        radius=radius,
-    )
-    restaurant_dicts: List[Dict[str, Any]] = []
-    for restaurant in restaurants:
-        details = await restaurant_service.get_restaurant_details(restaurant)
-        restaurant_dicts.append(details)
+    lat = location_data["lat"]
+    lon = location_data["lon"]
+    radius = request.radius or 10000
+
+    # ── Fetch restaurants ─────────────────────────────────────────────────────
+    restaurants: List[Dict[str, Any]] = []
+    source_used = "osm"
+
+    if foursquare_service.is_configured():
+        try:
+            restaurants = await foursquare_service.search_restaurants(lat, lon, radius=radius)
+            if restaurants:
+                source_used = "foursquare"
+        except Exception as e:
+            print(f"[Restaurants] Foursquare failed ({e}), falling back to OSM")
+
+    # Fallback to OpenStreetMap — run get_restaurant_details concurrently
+    if not restaurants:
+        raw = await restaurant_service.find_restaurants_nearby(lat=lat, lon=lon, radius=radius)
+        restaurants = list(await asyncio.gather(
+            *[restaurant_service.get_restaurant_details(r) for r in raw]
+        ))
+        source_used = "osm"
 
     return RestaurantResponse(
         success=True,
-        restaurants=restaurant_dicts,
-        count=len(restaurant_dicts),
+        restaurants=restaurants,
+        count=len(restaurants),
+        location=location_data,
+        source=source_used,
     )
-
-
-@router.post("/nearby", response_model=RestaurantResponse)
-async def find_nearby_restaurants(request: RestaurantSearchRequest):
-    """Find restaurants near given coordinates"""
-    try:
-        restaurants = await restaurant_service.find_restaurants_nearby(
-            lat=request.lat,
-            lon=request.lon,
-            radius=request.radius
-        )
-
-        restaurant_dicts = []
-        for restaurant in restaurants:
-            details = await restaurant_service.get_restaurant_details(restaurant)
-            restaurant_dicts.append(details)
-
-        return RestaurantResponse(
-            success=True,
-            restaurants=restaurant_dicts,
-            count=len(restaurant_dicts)
-        )
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error finding restaurants: {str(e)}")
-
-@router.get("/nearby", response_model=RestaurantResponse)
-async def find_nearby_restaurants_get(
-    lat: float = Query(..., description="Latitude"),
-    lon: float = Query(..., description="Longitude"),
-    radius: int = Query(2000, description="Search radius in meters")
-):
-    """Find restaurants near given coordinates (GET method)"""
-    try:
-        restaurants = await restaurant_service.find_restaurants_nearby(
-            lat=lat,
-            lon=lon,
-            radius=radius
-        )
-
-        restaurant_dicts = []
-        for restaurant in restaurants:
-            details = await restaurant_service.get_restaurant_details(restaurant)
-            restaurant_dicts.append(details)
-
-        return RestaurantResponse(
-            success=True,
-            restaurants=restaurant_dicts,
-            count=len(restaurant_dicts)
-        )
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error finding restaurants: {str(e)}")
-
-@router.get("/details/{restaurant_name}", response_model=RestaurantDetailsResponse)
-async def get_restaurant_details_by_name(restaurant_name: str):
-    """Get details for a specific restaurant by name"""
-    try:
-        return RestaurantDetailsResponse(
-            success=False,
-            error="Restaurant lookup by name not implemented. Use nearby search instead."
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error getting restaurant details: {str(e)}")

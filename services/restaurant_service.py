@@ -1,8 +1,7 @@
 import httpx
+import asyncio
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
-
-from utils.helpers import stable_restaurant_id
 
 @dataclass
 class Restaurant:
@@ -11,12 +10,11 @@ class Restaurant:
     lon: float
     address: str
     cuisine: Optional[str] = None
+    amenity: Optional[str] = None   # restaurant / cafe / fast_food
     phone: Optional[str] = None
     website: Optional[str] = None
-    rating: Optional[float] = None
     distance: Optional[float] = None
 
-# Public Overpass API mirrors (tried in order if one fails/is slow)
 OVERPASS_MIRRORS = [
     "https://overpass-api.de/api/interpreter",
     "https://lz4.overpass-api.de/api/interpreter",
@@ -28,56 +26,38 @@ class RestaurantService:
     def __init__(self):
         self.overpass_mirrors = OVERPASS_MIRRORS
 
-    async def find_restaurants_nearby(
-        self, lat: float, lon: float, radius: int = 2000, max_results: int = 80
-    ) -> List[Restaurant]:
-        """Find restaurants near given coordinates using OpenStreetMap Overpass API.
-        Tries multiple free mirrors until one succeeds."""
-
-        # Larger circles need more time on public Overpass instances
-        overpass_timeout = max(25, min(90, 20 + radius // 800))
-        http_timeout = float(overpass_timeout + 15)
-
-        # Also include cafes and fast_food in addition to restaurants
-        query = f"""
-        [out:json][timeout:{overpass_timeout}];
-        (
-          node["amenity"~"restaurant|cafe|fast_food"](around:{radius},{lat},{lon});
-          way["amenity"~"restaurant|cafe|fast_food"](around:{radius},{lat},{lon});
-        );
-        out center;
-        """
-
+    async def find_restaurants_nearby(self, lat: float, lon: float, radius: int = 10000) -> List[Restaurant]:
+        query = (
+            f"[out:json][timeout:40];"
+            f"("
+            f"node[\"amenity\"~\"restaurant|cafe|fast_food\"](around:{radius},{lat},{lon});"
+            f"way[\"amenity\"~\"restaurant|cafe|fast_food\"](around:{radius},{lat},{lon});"
+            f");"
+            f"out center;"
+        )
         headers = {"User-Agent": "FoodRouletteApp/1.0", "Accept": "application/json"}
+
         for mirror in self.overpass_mirrors:
             try:
-                async with httpx.AsyncClient(timeout=http_timeout, headers=headers) as client:
-                    response = await client.post(mirror, data={"data": query})
-                    if response.status_code == 200:
-                        data = response.json()
-                        results = self._parse_restaurants(data, lat, lon, max_results)
-                        if results:
-                            print(f"[RestaurantService] Got {len(results)} results from {mirror}")
-                            return results
-                    else:
-                        print(f"[RestaurantService] Mirror {mirror} returned {response.status_code}")
+                async with httpx.AsyncClient(timeout=45.0, headers=headers) as client:
+                    resp = await client.post(mirror, data={"data": query})
+                if resp.status_code == 200:
+                    results = self._parse_restaurants(resp.json(), lat, lon)
+                    if results:
+                        print(f"[OSM] Got {len(results)} results from {mirror}")
+                        return results
+                else:
+                    print(f"[OSM] {mirror} returned {resp.status_code}")
             except Exception as e:
-                print(f"[RestaurantService] Mirror {mirror} failed: {e}")
-                continue
+                print(f"[OSM] {mirror} failed: {e}")
 
-        print("[RestaurantService] All mirrors failed or returned empty results.")
+        print("[OSM] All mirrors failed.")
         return []
 
-    def _parse_restaurants(
-        self, data: Dict, user_lat: float, user_lon: float, max_results: int = 80
-    ) -> List[Restaurant]:
-        """Parse Overpass API response into Restaurant objects"""
+    def _parse_restaurants(self, data: Dict, user_lat: float, user_lon: float) -> List[Restaurant]:
         restaurants = []
-
         for element in data.get("elements", []):
             tags = element.get("tags", {})
-
-            # Get coordinates
             if element["type"] == "node":
                 lat, lon = element["lat"], element["lon"]
             elif element["type"] in ("way", "relation"):
@@ -88,69 +68,89 @@ class RestaurantService:
             else:
                 continue
 
-            # Build restaurant object
-            restaurant = Restaurant(
-                name=tags.get("name", "Unknown Restaurant"),
+            name = tags.get("name", "").strip()
+            if not name:
+                continue
+
+            r = Restaurant(
+                name=name,
                 lat=lat,
                 lon=lon,
                 address=self._build_address(tags),
                 cuisine=tags.get("cuisine"),
+                amenity=tags.get("amenity", "restaurant"),
                 phone=tags.get("phone"),
                 website=tags.get("website"),
-                rating=None,
             )
-            restaurant.distance = self._calculate_distance(user_lat, user_lon, lat, lon)
-            restaurants.append(restaurant)
+            r.distance = self._haversine(user_lat, user_lon, lat, lon)
+            restaurants.append(r)
 
-        restaurants.sort(key=lambda x: x.distance or float("inf"))
-        cap = max(1, min(120, max_results))
-        return restaurants[:cap]
+        restaurants.sort(key=lambda x: x.distance or 99)
+        return restaurants[:30]
 
     def _build_address(self, tags: Dict) -> str:
-        """Build address from OSM tags"""
         parts = []
-        if "addr:housenumber" in tags:
+        if tags.get("addr:housenumber"):
             parts.append(tags["addr:housenumber"])
-        if "addr:street" in tags:
+        if tags.get("addr:street"):
             parts.append(tags["addr:street"])
-        if "addr:city" in tags:
+        if tags.get("addr:suburb"):
+            parts.append(tags["addr:suburb"])
+        if tags.get("addr:city"):
             parts.append(tags["addr:city"])
-        return ", ".join(parts) if parts else "Address unknown"
+        return ", ".join(parts) if parts else ""
 
-    def _calculate_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-        """Haversine distance in km"""
+    def _haversine(self, lat1, lon1, lat2, lon2) -> float:
         from math import radians, cos, sin, asin, sqrt
         lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
-        dlat = lat2 - lat1
-        dlon = lon2 - lon1
-        a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+        dlat, dlon = lat2 - lat1, lon2 - lon1
+        a = sin(dlat/2)**2 + cos(lat1)*cos(lat2)*sin(dlon/2)**2
         return 6371 * 2 * asin(sqrt(a))
 
-    async def get_restaurant_details(self, restaurant: Restaurant) -> Dict[str, Any]:
-        """Serialize a Restaurant dataclass to a response dict"""
-        lat, lon = restaurant.lat, restaurant.lon
-        maps_url = f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
-        categories: List[str] = []
-        if restaurant.cuisine:
-            for part in restaurant.cuisine.replace(";", ",").split(","):
-                p = part.strip()
-                if p:
-                    categories.append(p)
-        if not categories:
-            categories = ["Local eats"]
+    async def get_restaurant_details(self, r: Restaurant) -> Dict[str, Any]:
+        # Map amenity type to a readable cuisine label if cuisine tag is missing
+        amenity_label = {
+            "cafe": "Cafe",
+            "fast_food": "Fast Food",
+            "restaurant": "Restaurant",
+        }.get(r.amenity or "", "Restaurant")
+
+        # Build best possible address
+        address = r.address if r.address else await self._reverse_geocode(r.lat, r.lon)
 
         return {
-            "id": stable_restaurant_id("osm", restaurant.name, lat, lon),
-            "source": "osm",
-            "name": restaurant.name,
-            "address": restaurant.address,
-            "cuisine": restaurant.cuisine,
-            "phone": restaurant.phone,
-            "website": restaurant.website,
-            "coordinates": {"lat": lat, "lon": lon},
-            "distance_km": round(restaurant.distance, 2) if restaurant.distance else None,
-            "photo_url": None,
-            "url": maps_url,
-            "maps_url": maps_url,
-            "categories": categories,
+            "name":        r.name,
+            "address":     address or "Pokhara, Nepal",
+            "cuisine":     r.cuisine or amenity_label,
+            "phone":       r.phone,
+            "website":     r.website,
+            "coordinates": {"lat": r.lat, "lon": r.lon},
+            "distance_km": round(r.distance, 2) if r.distance else None,
+            "photo_url":   None,
+            "source":      "osm",
         }
+
+    async def _reverse_geocode(self, lat: float, lon: float) -> str:
+        """
+        Single Nominatim reverse-geocode call — only used when address tags are missing.
+        Nominatim ToS: max 1 req/sec, include User-Agent.
+        """
+        try:
+            headers = {"User-Agent": "FoodRouletteApp/1.0"}
+            url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json&zoom=18"
+            async with httpx.AsyncClient(timeout=8.0, headers=headers) as client:
+                resp = await client.get(url)
+            if resp.status_code == 200:
+                d = resp.json()
+                addr = d.get("address", {})
+                parts = []
+                if addr.get("road"):
+                    parts.append(addr["road"])
+                if addr.get("suburb") or addr.get("neighbourhood"):
+                    parts.append(addr.get("suburb") or addr.get("neighbourhood"))
+                if addr.get("city") or addr.get("town"):
+                    parts.append(addr.get("city") or addr.get("town"))
+                return ", ".join(parts) if parts else d.get("display_name", "")[:60]
+        except Exception:
+            pass
+        return ""
